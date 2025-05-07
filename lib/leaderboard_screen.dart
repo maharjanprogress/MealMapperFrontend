@@ -12,7 +12,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   late TabController _tabController;
   final List<String> _leaderboardCategories = [
     'Global',
-    'Friends',
     'Weekly',
     'Monthly'
   ];
@@ -53,6 +52,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    // Get the current orientation
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -61,7 +63,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           colors: [Colors.teal.shade50, Colors.white],
         ),
       ),
-      child: Column(
+      child: isLandscape
+          ? SingleChildScrollView(
+        child: Column(
+          children: [
+            _buildLeaderboardHeader(),
+            _buildTabBar(),
+            SizedBox(
+              // Set a fixed height for TabBarView in landscape mode
+              height: MediaQuery.of(context).size.height * 0.8,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildLeaderboardTab(_globalLeaderboard),
+                  _buildLeaderboardTab(_weeklyLeaderboard),
+                  _buildLeaderboardTab(_globalLeaderboard),
+                ],
+              ),
+            ),
+          ],
+        ),
+      )
+          : Column(
         children: [
           _buildLeaderboardHeader(),
           _buildTabBar(),
@@ -70,9 +93,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               controller: _tabController,
               children: [
                 _buildLeaderboardTab(_globalLeaderboard),
-                _buildLeaderboardTab(_weeklyLeaderboard), // Using weekly data for friends tab as placeholder
                 _buildLeaderboardTab(_weeklyLeaderboard),
-                _buildLeaderboardTab(_globalLeaderboard), // Using global data for monthly tab as placeholder
+                _buildLeaderboardTab(_globalLeaderboard),
               ],
             ),
           ),
@@ -213,12 +235,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            padding: const EdgeInsets.symmetric(vertical: 10.0),
             child: Row(
               children: [
-                const SizedBox(width: 24, child: Text('Rank', style: TextStyle(fontWeight: FontWeight.bold))),
+                const SizedBox(width: 50, child: Text('Rank', style: TextStyle(fontWeight: FontWeight.bold))),
                 const SizedBox(width: 16),
-                const Expanded(child: Text('User', style: TextStyle(fontWeight: FontWeight.bold))),
+                const Expanded(child: Text('User', style: TextStyle(fontWeight: FontWeight.bold),textAlign: TextAlign.center,)),
                 const SizedBox(width: 16),
                 const Text('Points', style: TextStyle(fontWeight: FontWeight.bold)),
               ],
@@ -259,7 +281,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       child: Row(
         children: [
           SizedBox(
-            width: 24,
+            width: 40,
             child: Text(
               '#$rank',
               style: TextStyle(
