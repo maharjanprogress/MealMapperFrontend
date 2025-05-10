@@ -50,7 +50,16 @@ class HttpService {
 
   Future<Response> put(String endpoint, {dynamic data, Map<String, dynamic>? queryParameters}) async {
     try {
-      final response = await _dio.put(endpoint, data: data, queryParameters: queryParameters);
+      final response = await _dio.put(
+        endpoint,
+        data: data,
+        queryParameters: queryParameters,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
       return response;
     } on DioException catch (e) {
       throw _handleError(e);

@@ -1,6 +1,9 @@
 // profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'edit_profile_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'http_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -10,53 +13,125 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final bool _isEditing = false;
+  // final bool _isEditing = false; todo: if any error occurs then uncomment this
 
-  // Mock user data
-  final Map<String, dynamic> _userData = {
-    'name': 'John Doe',
-    'email': 'john.doe@example.com',
-    'username': 'johndoe',
-    'age': 28,
-    'gender': 'Male',
-    'height': 175.0,
-    'weight': 70.0,
-    'activity_level': 'Moderate',
-    'goal': 'Maintain',
-    'dietary_pref': 'None',
-    'allergies': ['Nuts', 'Shellfish'],
-    'medical_conditions': ['None'],
-    'meal_times': {
-      'breakfast': '08:00',
-      'lunch': '13:00',
-      'dinner': '19:00',
-    },
-    'address': '123 Main St, Anytown, USA',
-    'points': 750,
-    'achievements': 8,
-    'completed_challenges': 12,
-    'longest_streak': 14,
-  };
+  bool _isLoading = true;
+  Map<String, dynamic> _userData = {};
+  List<Map<String, dynamic>> _nutritionHistory = [];
+  List<Map<String, dynamic>> _macroData = [];
 
-  // Mock nutrition data
-  final List<Map<String, dynamic>> _nutritionHistory = [
-    {'date': 'Mon', 'calories': 2100, 'target': 2200},
-    {'date': 'Tue', 'calories': 2300, 'target': 2200},
-    {'date': 'Wed', 'calories': 1950, 'target': 2200},
-    {'date': 'Thu', 'calories': 90, 'target': 2200},
-    {'date': 'Fri', 'calories': 2050, 'target': 2200},
-    {'date': 'Sat', 'calories': 2250, 'target': 2200},
-    {'date': 'Sun', 'calories': 2150, 'target': 2200},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
 
-  final List<Map<String, dynamic>> _macroData = [
-    {'name': 'Protein', 'value': 28, 'target': 30, 'color': Colors.blue},
-    {'name': 'Carbs', 'value': 52, 'target': 50, 'color': Colors.green},
-    {'name': 'Fat', 'value': 20, 'target': 20, 'color': Colors.orange},
-  ];
+  Future<void> _loadProfileData() async {
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('userId');
+      final username = prefs.getString('username');
+      final email = prefs.getString('email');
+      final httpService = HttpService();
+      final response = await httpService.get('profile/$userId'); // Replace with actual user ID
+      final data = response.data;
+
+      if (data['code'] == 200) {
+        final details = data['details'];
+
+        // Initialize user data
+        _userData = {
+          'name': username, // Add these from auth data
+          'email': email, // Add these from auth data
+          'username': username, // Add these from auth data
+          'age': details['personal_info']['age'],
+          'gender': details['personal_info']['gender'] == 1 ? 'Male' : 'Female',
+          'height': details['personal_info']['height_cm'],
+          'weight': details['personal_info']['weight_kg'],
+          'activity_level': _getActivityLevel(details['personal_info']['activity_level']),
+          'goal': _getGoal(details['personal_info']['goal']),
+          'dietary_pref': details['personal_info']['dietary_pref'],
+          'allergies': List<String>.from(details['personal_info']['allergies']),
+          'medical_conditions': List<String>.from(details['personal_info']['medical_conditions']),
+          'meal_times': details['personal_info']['meal_times'],
+          'address': details['personal_info']['address'],
+          'points': details['achievements']['season_points'],
+          'completed_challenges': details['achievements']['completed_challenges'],
+        };
+
+        // Initialize nutrition history
+        final weeklyCalories = details['weekly_calories'] as Map<String, dynamic>;
+        _nutritionHistory = weeklyCalories.entries.map((entry) {
+          return {
+            'date': _formatDate(entry.key),
+            'calories': entry.value,
+            'target': 2200.0, // Add your target calculation here
+          };
+        }).toList();
+
+        // Initialize macro data
+        final macros = details['today_macros'];
+        double totalMacros = macros['protein'] + macros['carbs'] + macros['fat'];
+        _macroData = [
+          {'name': 'Protein', 'value': _calculatePercentage(macros['protein'],totalMacros), 'target': 100, 'color': Colors.blue},
+          {'name': 'Carbs', 'value': _calculatePercentage(macros['carbs'],totalMacros), 'target': 100, 'color': Colors.green},
+          {'name': 'Fat', 'value': _calculatePercentage(macros['fat'],totalMacros), 'target': 100, 'color': Colors.orange},
+        ];
+      }
+    } catch (e) {
+      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading profile: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+  String _formatDate(String dateStr) {
+    final date = DateTime.parse(dateStr);
+    final weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return weekDays[date.weekday - 1]; // weekday is 1-7 where 1 is Monday
+  }
+
+  String _getActivityLevel(int level) {
+    switch (level) {
+      case -1: return 'Sedentary';
+      case 0: return 'Moderate';
+      case 1: return 'Active';
+      default: return 'Not Set';
+    }
+  }
+
+  String _getGoal(int goal) {
+    switch (goal) {
+      case -1: return 'Lose Weight';
+      case 0: return 'Maintain';
+      case 1: return 'Gain Weight';
+      default: return 'Not Set';
+    }
+  }
+
+  int _calculatePercentage(double value,double totalMacros) {
+    // Get total of all macros from today_macros
+
+    // Calculate percentage
+    if (totalMacros == 0) return 0;
+    return ((value / totalMacros) * 100).round().clamp(0, 100);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Colors.teal,
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -136,7 +211,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () {
-                      // TODO: Implement edit profile
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+                      );
                     },
                   ),
                 ],
@@ -153,10 +231,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Expanded(
           child: _buildStatCard('Points', _userData['points'].toString(), Icons.stars, Colors.amber),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard('Achievements', _userData['achievements'].toString(), Icons.emoji_events, Colors.orange),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -268,20 +342,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildCaloriesChart() {
     // Calculate maxY dynamically based on the highest calories value
-    double maxY = _nutritionHistory.map((e) => e['calories'] as int).reduce((a, b) => a > b ? a : b).toDouble() + 500;
+    double maxY = _nutritionHistory.map((e) => e['calories'] as double).reduce((a, b) => a > b ? a : b)+ 500;
 
     return SizedBox(
-      height: 200, // Ensure enough height for the chart
+      height: 200,
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: maxY, // Use dynamic maxY
+          maxY: maxY,
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 return BarTooltipItem(
-                  '${_nutritionHistory[groupIndex]['calories']} kcal',
+                  '${_nutritionHistory[groupIndex]['calories'].toStringAsFixed(1)} kcal',
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -316,8 +390,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
                   if (value == 0) return const Text('0');
-                  if (value == maxY / 2) return Text('${(maxY / 2).toInt()}');
-                  if (value == maxY) return Text('${maxY.toInt()}');
+                  if (value == maxY / 2) return Text('${(maxY / 2).toStringAsFixed(0)}');
+                  if (value == maxY) return Text('${maxY.toStringAsFixed(0)}');
                   return const Text('');
                 },
                 reservedSize: 30,
@@ -329,11 +403,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           gridData: FlGridData(
             show: true,
             drawHorizontalLine: true,
-            horizontalInterval: maxY / 4, // Adjust interval for better readability
+            horizontalInterval: maxY / 4,
             getDrawingHorizontalLine: (value) {
               return FlLine(
                 color: Colors.grey.shade300,
-                strokeWidth: 3,
+                strokeWidth: 1,
               );
             },
           ),
@@ -343,14 +417,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           barGroups: _nutritionHistory.asMap().entries.map((entry) {
             int index = entry.key;
             Map<String, dynamic> data = entry.value;
+            double calories = data['calories'] as double;
 
             return BarChartGroupData(
               x: index,
               barRods: [
                 BarChartRodData(
-                  toY: data['calories'].toDouble(),
+                  toY: calories,
                   gradient: LinearGradient(
-                    colors: data['calories'] > data['target']
+                    colors: calories > data['target']
                         ? [Colors.teal, Colors.tealAccent]
                         : [Colors.red, Colors.redAccent],
                   ),
@@ -449,12 +524,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.teal),
-                  onPressed: () {
-                    // TODO: Implement edit personal info
-                  },
                 ),
               ],
             ),

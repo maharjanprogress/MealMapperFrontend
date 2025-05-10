@@ -20,6 +20,22 @@ class _FoodSearchDialogState extends State<FoodSearchDialog> {
   String selectedMealType = 'Breakfast';
   final TextEditingController _searchController = TextEditingController();
   bool _showResults = true;
+  @override
+  void initState() {
+    super.initState();
+    selectedMealType = _getMealTypeBasedOnTime();
+  }
+
+  String _getMealTypeBasedOnTime() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 11) {
+      return 'Breakfast';
+    } else if (hour >= 11 && hour < 17) {
+      return 'Lunch';
+    } else {
+      return 'Dinner';
+    }
+  }
 
   Future<void> fetchFoods(String query) async {
     print('Search query: $query'); // Debug print
