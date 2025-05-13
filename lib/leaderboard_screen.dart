@@ -167,7 +167,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           Text(
             'Compete with others and earn rewards!',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: const Color.fromRGBO(255, 255, 255, 0.9),
               fontSize: 14,
             ),
           ),
@@ -345,7 +345,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: isCurrentUser ? Colors.teal.withOpacity(0.1) : Colors.white,
+        color: isCurrentUser ? Color.fromRGBO(0, 150, 136, 0.1) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCurrentUser ? Colors.teal : Colors.grey.shade200,
