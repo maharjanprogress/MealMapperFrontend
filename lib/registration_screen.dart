@@ -714,7 +714,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
           // Navigate to the home screen
           Navigator.pushReplacementNamed(context, '/home');
-        } else {
+        }
+        else if(response.data != null && response.data['code'] == 206) {
+          // Show error message if email already exists
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response.data['message'] ?? 'Email or username already exists')),
+          );
+        }
+        else {
           // Show error message if registration fails
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(response.data['message'] ?? 'Registration failed')),

@@ -13,7 +13,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // final bool _isEditing = false; todo: if any error occurs then uncomment this
+  // final bool _isEditing = false; //todo: if any error occurs then uncomment this
 
   bool _isLoading = true;
   Map<String, dynamic> _userData = {};

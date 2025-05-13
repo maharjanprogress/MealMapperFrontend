@@ -1,5 +1,7 @@
 // leaderboard_screen.dart
 import 'package:flutter/material.dart';
+import 'http_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({Key? key}) : super(key: key);
@@ -17,31 +19,74 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   ];
 
   // Mock leaderboard data
-  final List<Map<String, dynamic>> _globalLeaderboard = [
-    {'rank': 1, 'username': 'fitfoodie', 'points': 9750, 'isCurrentUser': false},
-    {'rank': 2, 'username': 'healthnut', 'points': 8920, 'isCurrentUser': false},
-    {'rank': 3, 'username': 'nutrimaster', 'points': 8450, 'isCurrentUser': false},
-    {'rank': 4, 'username': 'johndoe', 'points': 7840, 'isCurrentUser': true},
-    {'rank': 5, 'username': 'veggielover', 'points': 7320, 'isCurrentUser': false},
-    {'rank': 6, 'username': 'mealeater', 'points': 6950, 'isCurrentUser': false},
-    {'rank': 7, 'username': 'kitchenchef', 'points': 6780, 'isCurrentUser': false},
-    {'rank': 8, 'username': 'foodexplorer', 'points': 6540, 'isCurrentUser': false},
-    {'rank': 9, 'username': 'healthyeats', 'points': 6210, 'isCurrentUser': false},
-    {'rank': 10, 'username': 'balancediet', 'points': 5980, 'isCurrentUser': false},
-  ];
+  // final List<Map<String, dynamic>> _globalLeaderboard = [
+  //   {'rank': 1, 'username': 'fitfoodie', 'points': 9750, 'isCurrentUser': false},
+  //   {'rank': 2, 'username': 'healthnut', 'points': 8920, 'isCurrentUser': false},
+  //   {'rank': 3, 'username': 'nutrimaster', 'points': 8450, 'isCurrentUser': false},
+  //   {'rank': 4, 'username': 'johndoe', 'points': 7840, 'isCurrentUser': true},
+  //   {'rank': 5, 'username': 'veggielover', 'points': 7320, 'isCurrentUser': false},
+  //   {'rank': 6, 'username': 'mealeater', 'points': 6950, 'isCurrentUser': false},
+  //   {'rank': 7, 'username': 'kitchenchef', 'points': 6780, 'isCurrentUser': false},
+  //   {'rank': 8, 'username': 'foodexplorer', 'points': 6540, 'isCurrentUser': false},
+  //   {'rank': 9, 'username': 'healthyeats', 'points': 6210, 'isCurrentUser': false},
+  //   {'rank': 10, 'username': 'balancediet', 'points': 5980, 'isCurrentUser': false},
+  // ];
+  //
+  // final List<Map<String, dynamic>> _weeklyLeaderboard = [
+  //   {'rank': 1, 'username': 'kitchenchef', 'points': 1250, 'isCurrentUser': false},
+  //   {'rank': 2, 'username': 'johndoe', 'points': 920, 'isCurrentUser': true},
+  //   {'rank': 3, 'username': 'healthnut', 'points': 845, 'isCurrentUser': false},
+  //   {'rank': 4, 'username': 'fitfoodie', 'points': 784, 'isCurrentUser': false},
+  //   {'rank': 5, 'username': 'nutrimaster', 'points': 732, 'isCurrentUser': false},
+  // ];
 
-  final List<Map<String, dynamic>> _weeklyLeaderboard = [
-    {'rank': 1, 'username': 'kitchenchef', 'points': 1250, 'isCurrentUser': false},
-    {'rank': 2, 'username': 'johndoe', 'points': 920, 'isCurrentUser': true},
-    {'rank': 3, 'username': 'healthnut', 'points': 845, 'isCurrentUser': false},
-    {'rank': 4, 'username': 'fitfoodie', 'points': 784, 'isCurrentUser': false},
-    {'rank': 5, 'username': 'nutrimaster', 'points': 732, 'isCurrentUser': false},
-  ];
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _globalLeaderboard = [];
+  List<Map<String, dynamic>> _weeklyLeaderboard = [];
+  List<Map<String, dynamic>> _monthlyLeaderboard = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _leaderboardCategories.length, vsync: this);
+    _fetchLeaderboardData();
+  }
+
+  Future<void> _fetchLeaderboardData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('userId');
+
+      // Fetch all leaderboards
+      final globalResponse = await HttpService().get('leaderboard/season/$userId');
+      final weeklyResponse = await HttpService().get('leaderboard/week/$userId');
+      final monthlyResponse = await HttpService().get('leaderboard/month/$userId');
+
+      if (globalResponse.data['code'] == 200) {
+        _globalLeaderboard = List<Map<String, dynamic>>.from(globalResponse.data['details']);
+      }
+      if (weeklyResponse.data['code'] == 200) {
+        _weeklyLeaderboard = List<Map<String, dynamic>>.from(weeklyResponse.data['details']);
+      }
+      if (monthlyResponse.data['code'] == 200) {
+        _monthlyLeaderboard = List<Map<String, dynamic>>.from(monthlyResponse.data['details']);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading leaderboard: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Map<String, dynamic>? _getCurrentUserData(List<Map<String, dynamic>> leaderboard) {
+    return leaderboard.firstWhere(
+          (user) => user['isCurrentUser'] == true,
+      orElse: () => {},
+    );
   }
 
   @override
@@ -52,7 +97,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    // Get the current orientation
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Container(
@@ -63,47 +107,39 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           colors: [Colors.teal.shade50, Colors.white],
         ),
       ),
-      child: isLandscape
-          ? SingleChildScrollView(
-        child: Column(
+      child: RefreshIndicator(
+        onRefresh: _fetchLeaderboardData,
+        child: isLandscape
+            ? SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildLeaderboardHeader(),
+              _buildTabBar(),
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.8,
+                child: _buildTabBarView(),
+              ),
+            ],
+          ),
+        )
+            : Column(
           children: [
             _buildLeaderboardHeader(),
             _buildTabBar(),
-            SizedBox(
-              // Set a fixed height for TabBarView in landscape mode
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildLeaderboardTab(_globalLeaderboard),
-                  _buildLeaderboardTab(_weeklyLeaderboard),
-                  _buildLeaderboardTab(_globalLeaderboard),
-                ],
-              ),
-            ),
+            Expanded(child: _buildTabBarView()),
           ],
         ),
-      )
-          : Column(
-        children: [
-          _buildLeaderboardHeader(),
-          _buildTabBar(),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildLeaderboardTab(_globalLeaderboard),
-                _buildLeaderboardTab(_weeklyLeaderboard),
-                _buildLeaderboardTab(_globalLeaderboard),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildLeaderboardHeader() {
+    final currentUserData = _getCurrentUserData(_tabController.index == 0
+        ? _globalLeaderboard
+        : _tabController.index == 1
+        ? _weeklyLeaderboard
+        : _monthlyLeaderboard);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
       decoration: BoxDecoration(
@@ -136,14 +172,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildUserRankCard(4, 'johndoe', 7840),
-            ],
-          ),
+          if (currentUserData?.isNotEmpty == true)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildUserRankCard(
+                  currentUserData!['rank'],
+                  currentUserData['username'],
+                  currentUserData['points'],
+                ),
+              ],
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTabBarView() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _buildLeaderboardTab(_globalLeaderboard),
+        _buildLeaderboardTab(_weeklyLeaderboard),
+        _buildLeaderboardTab(_monthlyLeaderboard),
+      ],
     );
   }
 
@@ -240,7 +296,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               children: [
                 const SizedBox(width: 50, child: Text('Rank', style: TextStyle(fontWeight: FontWeight.bold))),
                 const SizedBox(width: 16),
-                const Expanded(child: Text('User', style: TextStyle(fontWeight: FontWeight.bold),textAlign: TextAlign.center,)),
+                const Expanded(child: Text('User', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
                 const SizedBox(width: 16),
                 const Text('Points', style: TextStyle(fontWeight: FontWeight.bold)),
               ],
@@ -248,7 +304,25 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           ),
           const Divider(),
           Expanded(
-            child: ListView.builder(
+            child: leaderboardData.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.leaderboard, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No data available',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : ListView.builder(
               itemCount: leaderboardData.length,
               itemBuilder: (context, index) {
                 final user = leaderboardData[index];
