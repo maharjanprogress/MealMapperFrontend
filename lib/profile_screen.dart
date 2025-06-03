@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'edit_profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'http_service.dart';
+import 'see_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -302,7 +303,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 TextButton(
                   onPressed: () {
-                    // TODO: Navigate to detailed nutrition page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SeeDetailsScreen()),
+                    );
                   },
                   child: const Text('See Details'),
                 ),
