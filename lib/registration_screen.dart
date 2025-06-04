@@ -1,5 +1,6 @@
 // registration_screen.dart
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'http_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
   final _addressController = TextEditingController();
+  final HttpService _httpService = HttpService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -30,8 +32,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   String? _selectedActivityLevel;
   String? _selectedGoal;
   String? _selectedDietaryPreference;
-  List<String> _selectedAllergies = [];
-  List<String> _selectedMedicalConditions = [];
 
   // Meal times
   final _breakfastTimeController = TextEditingController(text: '08:00');
@@ -43,10 +43,27 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final List<String> _activityLevelOptions = ['Not Active', 'Moderate', 'Very Active'];
   final List<String> _goalOptions = ['Go Slim', 'Maintain', 'Gain Weight'];
   final List<String> _dietaryPreferenceOptions = ['Any', 'Vegetarian', 'Vegan', 'Pescatarian','Carnivore', 'Keto', 'Omnivore'];
-  final List<String> _allergyOptions = ['Gluten', 'Dairy', 'Nuts', 'Shellfish', 'Eggs', 'Soy'];
-  final List<String> _medicalConditionOptions = ['None', 'Diabetes', 'Hypertension', 'Heart Disease', 'Celiac Disease'];
+
+  List<String> _selectedAllergies = [];
+  List<Map<String, dynamic>> _dynamicAllergyOptions = [];
+  final _allergySearchController = TextEditingController();
+  Timer? _allergySearchDebouncer;
+  bool _isLoadingAllergies = false;
+
+  List<String> _selectedMedicalConditions = [];
+  List<Map<String, dynamic>> _dynamicMedicalConditionOptions = [];
+  final _medicalConditionSearchController = TextEditingController();
+  Timer? _medicalConditionSearchDebouncer;
+  bool _isLoadingMedicalConditions = false;
 
   int _currentStep = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _allergySearchController.addListener(_onAllergySearchChanged);
+    _medicalConditionSearchController.addListener(_onMedicalConditionSearchChanged);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -478,38 +495,83 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         const SizedBox(height: 16),
         const Text(
           'Medical Conditions',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          children: _medicalConditionOptions.map((String condition) {
-            return FilterChip(
-              label: Text(condition),
-              selected: _selectedMedicalConditions.contains(condition),
-              onSelected: (bool selected) {
-                setState(() {
-                  if (condition == 'None') {
-                    if (selected) {
-                      _selectedMedicalConditions = ['None'];
-                    } else {
-                      _selectedMedicalConditions = [];
-                    }
-                  } else {
-                    if (selected) {
-                      _selectedMedicalConditions.add(condition);
-                      _selectedMedicalConditions.remove('None');
-                    } else {
-                      _selectedMedicalConditions.remove(condition);
-                    }
-                  }
-                });
+        TextFormField(
+          controller: _medicalConditionSearchController,
+          decoration: InputDecoration(
+            labelText: 'Search Medical Conditions',
+            hintText: 'e.g., Diabetes',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            suffixIcon: _medicalConditionSearchController.text.isNotEmpty
+                ? IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                _medicalConditionSearchController.clear();
+                // _onMedicalConditionSearchChanged will be triggered by listener
               },
-              selectedColor: Colors.teal.shade100,
-              checkmarkColor: Colors.teal,
-            );
-          }).toList(),
+            )
+                : null,
+          ),
         ),
+        const SizedBox(height: 8),
+        // Static "None" option
+        FilterChip(
+          label: const Text('None'),
+          selected: _selectedMedicalConditions.contains('None'),
+          onSelected: (bool selected) {
+            setState(() {
+              if (selected) {
+                _selectedMedicalConditions = ['None']; // Clears other selections and adds 'None'
+              } else {
+                _selectedMedicalConditions.remove('None');
+              }
+            });
+          },
+          selectedColor: Colors.teal.shade100,
+          checkmarkColor: Colors.teal,
+          labelStyle: TextStyle(color: _selectedMedicalConditions.contains('None') ? Colors.teal : Colors.black87),
+        ),
+        if (_isLoadingMedicalConditions)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_medicalConditionSearchController.text.isNotEmpty && _dynamicMedicalConditionOptions.isEmpty && !_isLoadingMedicalConditions)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10.0),
+            child: Center(child: Text('No conditions found matching your search.')),
+          )
+        else
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: _dynamicMedicalConditionOptions.map((condition) {
+              final conditionName = condition['name'] as String;
+              final bool isSelected = _selectedMedicalConditions.contains(conditionName);
+              return FilterChip(
+                label: Text(conditionName),
+                selected: isSelected,
+                onSelected: (bool selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedMedicalConditions.add(conditionName);
+                      _selectedMedicalConditions.remove('None'); // Deselect 'None' if another condition is selected
+                    } else {
+                      _selectedMedicalConditions.remove(conditionName);
+                    }
+                  });
+                },
+                selectedColor: Colors.teal.shade100,
+                checkmarkColor: Colors.teal,
+                labelStyle: TextStyle(color: isSelected ? Colors.teal : Colors.black87),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
@@ -548,33 +610,69 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         const SizedBox(height: 16),
         const Text(
           'Allergies',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          children: _allergyOptions.map((String allergy) {
-            return FilterChip(
-              label: Text(allergy),
-              selected: _selectedAllergies.contains(allergy),
-              onSelected: (bool selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedAllergies.add(allergy);
-                  } else {
-                    _selectedAllergies.remove(allergy);
-                  }
-                });
+        TextFormField(
+          controller: _allergySearchController,
+          decoration: InputDecoration(
+            labelText: 'Search Allergies',
+            hintText: 'e.g., Peanuts',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            suffixIcon: _allergySearchController.text.isNotEmpty
+                ? IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                _allergySearchController.clear();
+                // _onAllergySearchChanged will be triggered by listener
               },
-              selectedColor: Colors.teal.shade100,
-              checkmarkColor: Colors.teal,
-            );
-          }).toList(),
+            )
+                : null,
+          ),
         ),
+        const SizedBox(height: 8),
+        if (_isLoadingAllergies)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10.0),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_allergySearchController.text.isNotEmpty && _dynamicAllergyOptions.isEmpty && !_isLoadingAllergies)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10.0),
+            child: Center(child: Text('No allergies found matching your search.')),
+          )
+        else
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: _dynamicAllergyOptions.map((allergy) {
+              final allergyName = allergy['name'] as String;
+              final bool isSelected = _selectedAllergies.contains(allergyName);
+              return FilterChip(
+                label: Text(allergyName),
+                selected: isSelected,
+                onSelected: (bool selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedAllergies.add(allergyName);
+                    } else {
+                      _selectedAllergies.remove(allergyName);
+                    }
+                  });
+                },
+                selectedColor: Colors.teal.shade100,
+                checkmarkColor: Colors.teal,
+                labelStyle: TextStyle(color: isSelected ? Colors.teal : Colors.black87),
+              );
+            }).toList(),
+          ),
         const SizedBox(height: 16),
         const Text(
           'Meal Times',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         const SizedBox(height: 8),
         Row(
@@ -671,6 +769,76 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
+  void _onAllergySearchChanged() {
+    if (_allergySearchDebouncer?.isActive ?? false) _allergySearchDebouncer!.cancel();
+    _allergySearchDebouncer = Timer(const Duration(milliseconds: 500), () {
+      final query = _allergySearchController.text.trim();
+      if (query.isNotEmpty) {
+        _fetchAllergies(query);
+      } else {
+        setState(() {
+          _dynamicAllergyOptions = [];
+          _isLoadingAllergies = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _fetchAllergies(String query) async {
+    setState(() => _isLoadingAllergies = true);
+    try {
+      final response = await _httpService.get('allergens/$query');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final details = List<Map<String, dynamic>>.from(response.data['details']);
+        setState(() {
+          _dynamicAllergyOptions = details;
+        });
+      } else {
+        setState(() { _dynamicAllergyOptions = []; });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.data['message'] ?? 'Failed to load allergies')));
+      }
+    } catch (e) {
+      setState(() { _dynamicAllergyOptions = []; });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching allergies: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoadingAllergies = false);
+    }
+  }
+
+  // Debounce and API call for Medical Conditions
+  void _onMedicalConditionSearchChanged() {
+    if (_medicalConditionSearchDebouncer?.isActive ?? false) _medicalConditionSearchDebouncer!.cancel();
+    _medicalConditionSearchDebouncer = Timer(const Duration(milliseconds: 500), () {
+      final query = _medicalConditionSearchController.text.trim();
+      if (query.isNotEmpty) {
+        _fetchMedicalConditions(query);
+      } else {
+        setState(() {
+          _dynamicMedicalConditionOptions = [];
+          _isLoadingMedicalConditions = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _fetchMedicalConditions(String query) async {
+    setState(() => _isLoadingMedicalConditions = true);
+    try {
+      final response = await _httpService.get('medical_condition_guidelines/$query'); // As per your endpoint "ingredients/(typed words)"
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        final details = List<Map<String, dynamic>>.from(response.data['details']);
+        setState(() => _dynamicMedicalConditionOptions = details);
+      } else {
+        setState(() => _dynamicMedicalConditionOptions = []);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.data['message'] ?? 'Failed to load medical conditions')));
+      }
+    } catch (e) {
+      setState(() => _dynamicMedicalConditionOptions = []);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching medical conditions: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoadingMedicalConditions = false);
+    }
+  }
   void _submitForm() async{
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -701,7 +869,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       try {
         // Send API request
-        final response = await HttpService().post('/users', data: userData);
+        final response = await _httpService.post('/users', data: userData);
 
         if (response.data != null && response.data['code'] == 201) {
           final details = response.data['details'];
@@ -713,25 +881,31 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           await prefs.setString('userEmail', details['email']);
 
           // Navigate to the home screen
-          Navigator.pushReplacementNamed(context, '/home');
+          if (mounted) Navigator.pushReplacementNamed(context, '/home');
         }
         else if(response.data != null && response.data['code'] == 206) {
           // Show error message if email already exists
-          ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(response.data['message'] ?? 'Email or username already exists')),
           );
+          }
         }
         else {
           // Show error message if registration fails
-          ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(response.data['message'] ?? 'Registration failed')),
           );
+          }
         }
       } catch (e) {
         // Handle any errors
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('An error occurred: $e')),
         );
+        }
       } finally {
         setState(() {
           _isLoading = false;
@@ -753,6 +927,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _breakfastTimeController.dispose();
     _lunchTimeController.dispose();
     _dinnerTimeController.dispose();
+    _allergySearchController.removeListener(_onAllergySearchChanged);
+    _allergySearchController.dispose();
+    _medicalConditionSearchController.removeListener(_onMedicalConditionSearchChanged);
+    _medicalConditionSearchController.dispose();
+    _allergySearchDebouncer?.cancel();
+    _medicalConditionSearchDebouncer?.cancel();
     super.dispose();
   }
 }
