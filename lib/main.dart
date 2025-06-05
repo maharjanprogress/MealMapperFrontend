@@ -7,6 +7,7 @@ import 'challenges_screen.dart';
 import 'profile_screen.dart';
 import 'leaderboard_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'admin/admin_page.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +68,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegistrationScreen(),
+        '/admin_page': (context) => const AdminPage(),
         '/home': (context) => MainScreen(initialIndex: 0),
         '/challenges': (context) => MainScreen(initialIndex: 1),
         '/profile': (context) => MainScreen(initialIndex: 2),
