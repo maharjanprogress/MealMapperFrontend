@@ -405,9 +405,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                 _longestStreak = response.data["details"]["longest_streak"];
                               });
                             }
+                            else if (response.statusCode == 204) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("The Scanned Food Does Not Exist in Our Database.")),
+                              );
+                            }
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Duplicate scan detected. Please wait 5 minutes before scanning the same food again.")),
+                              SnackBar(content: Text("Some Error Occurred: $e")),
                             );
                           }
                         },
